@@ -1,1 +1,1 @@
-This folder contains processed data files.
+This folder is reserved for cleaned or processed datasets if applicable.
