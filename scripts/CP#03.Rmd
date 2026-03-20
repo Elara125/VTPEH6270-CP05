@@ -1,0 +1,230 @@
+---
+title: "VTPEH 6270 - Check Point 03"
+subtitle: "Data Set Selection & R markdown Report Outline"
+author: "Jiaru Wei"
+date: "`r Sys.Date()`"
+editor_options:
+  chunk_output_type: console
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 1
+    number_sections: true
+bibliography: references.bib
+csl: apa.csl
+urlcolor: blue
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+
+# Introduction
+
+This document serves as the foundation for the rest of the project. The final submission must meet the following criteria:
+
+- The report must be submitted as a **PDF** file.
+- It should include appropriate **section headers** and a **table of contents**.
+- All **R code** used in the analysis must be included.
+- All relevant **figures** must be displayed in the report.
+- Console output may be included when relevant.
+- The report should be clearly written, well-organized, and easy to navigate (e.g., avoid printing the full dataset within the report). ***Formatting errors may result in point deductions.***
+
+Sections from previous reports may be reused if relevant. Any section of the report may be revised as the project develops. The goal of this Check Point is to further explore the dataset and gain experience producing publication-quality reports using R Markdown. It also serves as preparation for future reports that will focus more heavily on statistical analyses.
+
+
+# Research Question and Background
+
+- **Research Question.** Select one focused research question that examines the association between two or more variables (A and B). For example: “Does X influence Y?”, “Is Y associated with Z?”, or “Does Y occur more frequently in group 1 than group 2?”
+
+
+Is lower perceived social support associated with higher depressive symptoms among adults aged 18 years and older?
+
+
+- **Scientific Plausibility and Context.** Explain why this association makes sense from a scientific perspective. Include at least three relevant citations that provide background for your research question and, if applicable, the expected outcome. ***Use proper citation formatting*** (e.g., see https://yihui.org/rmarkdown-cookbook/bibliography).
+
+
+Many studies suggest that lower perceived social support is linked to higher depressive symptoms among adults. Social support can help people cope with stress and difficult life events. According to the stress-buffering hypothesis, having strong social support can reduce the negative psychological effects of stress [@Cohen1985]. This means that people who feel supported by family, friends, or their community may be less likely to experience depression.
+
+Research has also shown that individuals who report low levels of perceived social support are more likely to experience depressive symptoms [@Santini2015]. A large cohort study also found that higher perceived social support predicted fewer depressive symptoms one year later, even after adjusting for important factors like prior mental health problems and family background [@Turecki2020]. 
+
+From a biological perspective, low social support may increase chronic stress, which can affect the body’s stress-response system (such as the HPA axis) and lead to higher cortisol levels. These changes are linked to depressive symptoms. Therefore, it is reasonable to expect that adults with lower perceived social support may report higher levels of depression.
+
+
+
+# Data Preparation
+
+For the following sections, at least one of the considered variables (B) must be **categorical** for summary and visualization purposes. If the research question focuses on continuous variables, one of the variables can be discretized (see below).
+
+If relevant, include any required data cleaning, subsetting, or transformation here. Data transformation may include:
+
+- **Derived Variables.** Create meaningful derived variables relevant to your research question (e.g., BMI from height/weight, time intervals from dates, ratios, z-scores, log transformations).
+
+- **Categorization and Discretization.** If analyzing continuous variables, consider creating meaningful categories or classes for summary and visualization purposes.
+
+
+In this study, depressive symptoms are measured using the PHQ-9 score, which is a continuous scale. Social support is operationalized using participation in social activities (HSQ500), which serves as a proxy for perceived social support and is measured as a categorical variable.
+
+To facilitate interpretation, depressive symptoms will remain as a continuous variable for descriptive analysis. Social participation (HSQ500) will be treated as a categorical variable (Yes/No), allowing for stratified summary statistics and comparison of depressive symptom levels across participation groups.
+
+Participants younger than 18 years old will be excluded from the analysis. Observations with missing values in key variables will also be removed.
+
+
+
+# Grouped Summary Statistics
+
+- **Stratified Analysis.** Create comprehensive tables of descriptive statistics for your variable A, stratified by your categorical variable B.
+
+
+```{r}
+
+
+# Load required libraries
+library(haven)
+library(dplyr)
+
+# Load Data
+setwd("D:/HuaweiMoveData/Users/111/Desktop/6270/checkpoint #03")
+dpq  <- read_xpt("DPQ_J.XPT")
+demo <- read_xpt("DEMO_J.XPT")
+hsq  <- read_xpt("HSQ_J.XPT")
+
+# Merge Data
+data <- dpq %>%
+  left_join(demo, by = "SEQN") %>%
+  left_join(hsq, by = "SEQN")
+
+# Calculate total PHQ-9 score
+data$PHQ9 <- rowSums(dplyr::select(data, DPQ010:DPQ090), na.rm = TRUE)
+
+# Restrict the sample to adults aged 18 years and older
+data <- data %>% 
+  filter(RIDAGEYR >= 18)
+
+# Create social participation variable (proxy for social support)
+data$SocialParticipation <- factor(data$HSQ500,
+                                   levels = c(1,2),
+                                   labels = c("Yes","No"))
+
+# Remove missing values
+data_clean <- data %>%
+  filter(!is.na(PHQ9),
+         !is.na(SocialParticipation))
+
+write.csv(data_clean,
+          file = "CP03_dataset.csv",
+          row.names = FALSE)
+
+#Summary Table
+summary_table <- data_clean %>%
+  group_by(SocialParticipation) %>%
+  summarise(
+    n = n(),
+    mean_PHQ9 = mean(PHQ9),
+    sd_PHQ9 = sd(PHQ9),
+    median_PHQ9 = median(PHQ9),
+    IQR_PHQ9 = IQR(PHQ9)
+  )
+
+summary_table
+
+```
+
+
+- **Interpretation.** Discuss what these statistics suggest about potential associations.
+
+
+The results show that individuals who reported participating in social activities had higher average PHQ-9 scores than those who did not participate (mean = 4.48 vs. 3.08). The median score was also higher among participants (3 vs. 2), and the wider IQR (7 vs. 4) indicates greater variability in depressive symptoms in this group.
+
+These findings suggest a potential association between social participation and depressive symptoms. However, the direction of the association does not support the expectation that social participation is protective. This pattern may be influenced by reverse causation or other confounding factors such as age or health status. Because the analysis is descriptive, no causal conclusions can be drawn.
+
+
+# Comparative Visualizations
+
+- **Association Visualization.** Create plots that directly address your research question using appropriate visualization types to explore the potential association between A and B.
+
+```{r}
+
+library(ggplot2)
+
+p1 <- ggplot(data_clean, aes(x = SocialParticipation, y = PHQ9)) +
+  geom_boxplot(fill = c("#4C72B0", "#DD8452"), alpha = 0.7) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Depressive Symptoms by Social Participation",
+    x = "Participation in Social Activities",
+    y = "PHQ-9 Score"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+p1
+
+
+p2 <- ggplot(data_clean, aes(x = SocialParticipation, y = PHQ9)) +
+  geom_boxplot(outlier.alpha = 0.2) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "red") +
+  theme_classic(base_size = 14) +
+  labs(
+    title = "Distribution of PHQ-9 Scores by Social Participation",
+    x = "Social Participation",
+    y = "PHQ-9 Score"
+  )
+
+p2
+
+```
+
+
+- **Visuals for Publication.** Save one visual as a PDF following the [Nature formatting guidelines](https://www.nature.com/nature/for-authors/formatting-guide).
+
+
+```{r}
+
+ggsave(
+  filename = "Figure1_PHQ9_SocialParticipation.pdf",
+  plot = p2,
+  width = 6,
+  height = 5,
+  units = "in"
+)
+
+```
+
+- **Interpretation.** For each visualization, provide scientific interpretation of what the patterns suggest about your research question.
+
+
+**Figure 1 (Boxplot of PHQ-9 Scores by Social Participation).**  
+The boxplot shows that individuals who reported participating in social activities have slightly higher PHQ-9 scores compared to those who did not participate. The median score appears higher in the participation group, and the interquartile range is wider, indicating greater variability in depressive symptoms. Both groups show right-skewed distributions with several high outliers, suggesting that a small proportion of individuals experience more severe depressive symptoms.
+
+**Figure 2 (Boxplot with Mean Values).**  
+The second visualization confirms this pattern by displaying the mean PHQ-9 score (red point) for each group. The mean score is higher among individuals who reported social participation, consistent with the descriptive statistics. However, the difference between groups is modest, and there is substantial overlap in the distributions.
+
+Overall, the visualizations suggest a potential association between social participation and depressive symptoms. However, the direction of the association does not support the expectation that social participation is protective. Because these results are based on descriptive analysis, no causal conclusions can be drawn.
+
+
+# AI Use Disclosure Statement
+
+*As part of this assignment, please indicate whether you used any AI-based tools (e.g., ChatGPT, Claude, Copilot, Gemini, etc.). Indicate:*
+
+* *Did you use AI? Yes / No*
+
+* *If yes: Write a short disclosure statement (2–3 sentences) describing:*
+
+* *Which tool(s) you used.*
+
+* *How you used it (e.g., to help decide on an analysis approach, to generate a first draft of code, to improve or debug code you had written yourself, etc.).*
+
+*Example: “This document was generated using Claude to generate original code, which was then reviewed and adjusted” or "This document was generate using ChatGPT to assist with debugging of code generated by the author".*
+
+*Please keep your statement brief and honest. The goal is transparency, not detail: we do not need exact prompts or transcripts, just a clear sense of how AI supported this work.*
+
+
+This task utilizes ChatGPT to assist in generating and formatting R Markdown content and R code for data cleaning, documentation writing, and visualization processing. Simultaneously, ChatGPT is employed to debug errors and optimize chart effects. Gemini is also used to check grammar and spelling errors during paragraph writing.
+
